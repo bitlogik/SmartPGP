@@ -226,6 +226,11 @@ public final class PGPKey {
                 (attributes[0] == (byte)0x13));
     }
 
+    protected final boolean is25519() {
+        //TODO: FIX ME
+        return false;
+    }
+
     protected final ECParams ecParams(final ECCurves ec) {
         final byte delta = (attributes[(short)(attributes_length - 1)] == (byte)0xff) ? (byte)1 : (byte)0;
         return ec.findByOid(attributes, (short)1, (byte)(attributes_length - 1 - delta));
@@ -250,15 +255,12 @@ public final class PGPKey {
 
         final ECParams params = ecParams(ec);
 
-        final ECPrivateKey priv = (ECPrivateKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE, params.nb_bits, false);
-        final ECPublicKey pub = (ECPublicKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC, params.nb_bits, false);
+        final XECPrivateKey priv = params.createPrivateKey(true);
+        final XECPublicKey pub = params.createPublicKey(true);
 
         if((priv == null) || (pub == null)) {
             return null;
         }
-
-        params.setParams(priv);
-        params.setParams(pub);
 
         return new KeyPair(pub, priv);
     }
@@ -386,19 +388,12 @@ public final class PGPKey {
                                       final byte tag_count, final byte[] tag_val, final short[] tag_len) {
         final ECParams params = ecParams(ec);
 
-        final ECPrivateKey priv = (ECPrivateKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PRIVATE,
-                                                                    params.nb_bits,
-                                                                    false);
-        final ECPublicKey pub = (ECPublicKey)KeyBuilder.buildKey(KeyBuilder.TYPE_EC_FP_PUBLIC,
-                                                                 params.nb_bits,
-                                                                 false);
+        final XECPrivateKey priv = params.createPrivateKey(true);
+        final XECPublicKey pub = params.createPublicKey(true);
 
         if((priv == null) || (pub == null)) {
             return null;
         }
-
-        params.setParams(priv);
-        params.setParams(pub);
 
         short off = boff;
         byte i = 0;
@@ -414,17 +409,11 @@ public final class PGPKey {
                 if(tag_len[i] > Common.bitsToBytes(params.nb_bits)) {
                     return null;
                 }
-                priv.setS(buf, off, tag_len[i]);
+                priv.setEncoded(buf, off, tag_len[i]);
                 break;
 
             case (byte)0x99:
-                if(tag_len[i] > (short)(2 * Common.bitsToBytes(params.nb_bits) + 1)) {
-                    return null;
-                }
-                if(((byte)(tag_len[i] - 1) & (byte)0x1) != 0) {
-                    return null;
-                }
-                pub.setW(buf, off, tag_len[i]);
+                pub.setEncoded(buf, off, tag_len[i]);
                 break;
 
             default:
@@ -654,7 +643,9 @@ public final class PGPKey {
 
             byte alg;
 
-            if(lc == MessageDigest.LENGTH_SHA) {
+            if(is25519()) {
+                alg = Signature.SIG_CIPHER_EDDSAPH;
+            } else if(lc == MessageDigest.LENGTH_SHA) {
                 alg = Signature.ALG_ECDSA_SHA;
             } else if(lc == MessageDigest.LENGTH_SHA_224) {
                 alg = Signature.ALG_ECDSA_SHA_224;
